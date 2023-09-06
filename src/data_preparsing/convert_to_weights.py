@@ -15,4 +15,3 @@ counts = Counter(links)
 with Path(out).open("w+") as stream:
     for link in tqdm(counts):
         stream.write(f"{link}, {counts[link]}\n")
-

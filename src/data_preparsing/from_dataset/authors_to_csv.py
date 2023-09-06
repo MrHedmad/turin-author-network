@@ -11,4 +11,3 @@ with Path(out_file).open("w+") as stream:
     stream.write("id\tname\torg\n")
     for key, values in tqdm(data.items()):
         stream.write(f"{key}\t{values['name']}\t{values['org']}\n")
-

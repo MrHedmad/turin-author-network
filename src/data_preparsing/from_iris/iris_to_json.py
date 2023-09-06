@@ -18,15 +18,31 @@ logging.basicConfig(level=logging.INFO)
 
 log = logging.getLogger(__name__)
 
+
 class Author:
-    def __init__(self, name: str, surname: str, affiliation: str, department: Optional[str] = None, id: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        surname: str,
+        affiliation: str,
+        department: Optional[str] = None,
+        id: Optional[str] = None,
+    ) -> None:
         log.debug(f"Creating author {name} {surname} {affiliation} {department} {id}")
         # TODO: perhaps we could remove weird unicode characters? To make the matching easier?
         # The guarding IFs are to get around NAs
         self.name = name.lower().strip() if name and pd.notna(name) else None
-        self.surname = surname.lower().strip() if surname and pd.notna(surname) else None
-        self.affiliation = affiliation.lower().strip() if affiliation and pd.notna(affiliation) else None
-        self.department = department.lower().strip() if department and pd.notna(department) else None
+        self.surname = (
+            surname.lower().strip() if surname and pd.notna(surname) else None
+        )
+        self.affiliation = (
+            affiliation.lower().strip()
+            if affiliation and pd.notna(affiliation)
+            else None
+        )
+        self.department = (
+            department.lower().strip() if department and pd.notna(department) else None
+        )
         self.id = id or str(uuid4())
 
         assert self.id is not None, "ID should not be None"
@@ -35,51 +51,56 @@ class Author:
         """Return if this author is a better version than the other"""
         if other.id != self.id:
             return False
-        
+
         # If any any of our fields are filled, we are better.
-        return (self.name is not None and other.name is None ) or \
-            (self.surname is not None and other.surname is None) or \
-            (self.affiliation is not None and other.affiliation is None) or \
-            (self.department is not None and other.department is None)
+        return (
+            (self.name is not None and other.name is None)
+            or (self.surname is not None and other.surname is None)
+            or (self.affiliation is not None and other.affiliation is None)
+            or (self.department is not None and other.department is None)
+        )
 
     def distance(self, other: Author) -> float:
         """Return the distance between this author and the other, ignoring the ID"""
         # This is a weighted average, were we give more importance to the name and surname
         # The rationale is that the affiliation and department are more likely to change
         # between roles
-        return (jws(self.name or "", other.name or "") + \
-            jws(self.surname or "", other.surname or "") + \
-            jws(self.affiliation or "", other.affiliation or "") * 0.5 + \
-            jws(self.department or "", other.department or "") * 0.5 ) / 3
+        return (
+            jws(self.name or "", other.name or "")
+            + jws(self.surname or "", other.surname or "")
+            + jws(self.affiliation or "", other.affiliation or "") * 0.5
+            + jws(self.department or "", other.department or "") * 0.5
+        ) / 3
 
 
 class AuthorGlobber:
     def __init__(self) -> None:
         self.authors = dict()
-    
+
     def add(self, author: Author) -> None:
         self.authors[author.id] = author
-    
+
     def add_or_glob(self, author: Author) -> str:
-        if (hit := self.find(author)):
+        if hit := self.find(author):
             return hit.id
         else:
             self.add(author)
             return author.id
-    
+
     def find(self, author: Author) -> Optional[Author]:
         if author.id in self.authors:
             # TODO: We return the saved one, but which is better?
             return self.authors[author.id]
-        
+
         for saved_author in self.authors.values():
             # If we have a similar author, return it
             if saved_author.distance(author) < 0.25:
                 # TODO: make the distance a parameter
                 # TODO: Which author is better?
                 return saved_author
-        
+
         return None
+
 
 @dataclass
 class Paper:
@@ -98,7 +119,6 @@ def parse_file_simple(gobbler: AuthorGlobber, data: pd.DataFrame) -> list[Paper]
     papers = []
 
     for paper_id, paper in tqdm(data.groupby("handle")):
-
         # Extract the authors and add them to the gobbler
         authors = []
         for _, row in paper.iterrows():
@@ -113,15 +133,15 @@ def parse_file_simple(gobbler: AuthorGlobber, data: pd.DataFrame) -> list[Paper]
             authors.append(result)
 
         paper_obj = Paper(
-            id = paper_id,
-            title = paper["title"].iloc[0], # The titles should all be the same
+            id=paper_id,
+            title=paper["title"].iloc[0],  # The titles should all be the same
             # TODO: We should probably check that the titles are the same
-            year = paper["year"].iloc[0], # The years should all be the same
+            year=paper["year"].iloc[0],  # The years should all be the same
             # TODO: We should probably check that the years are the same,
             authors=authors,
         )
         papers.append(paper_obj)
-    
+
     log.info(f"Found {len(papers)} papers")
     log.debug(papers[0])
 
@@ -150,7 +170,21 @@ def read_iris_data(path: Path) -> pd.DataFrame:
         encoding="utf-8",
         true_values=["si", "Sì", "SI", "sì", "yes", "Yes", "YES"],
         false_values=["no", "No", "NO"],
-        na_values=["n.d.", "n.d", "nd", "N.D.", "N.D", "ND", "n.a.", "n.a", "na", "N.A.", "N.A", "NA", ""],
+        na_values=[
+            "n.d.",
+            "n.d",
+            "nd",
+            "N.D.",
+            "N.D",
+            "ND",
+            "n.a.",
+            "n.a",
+            "na",
+            "N.A.",
+            "N.A",
+            "NA",
+            "",
+        ],
         skip_blank_lines=True,
     )
 
@@ -194,8 +228,9 @@ def standardize_header(head: str) -> str:
 
     if head in matches:
         return matches[head]
-    
+
     raise ValueError(f"Unknown header: {head}")
+
 
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -217,7 +252,7 @@ def main(folder: Path, output_steam: IOBase):
     papers = []
     for dataset in datasets:
         papers.extend(parse_file_simple(author_gobbler, dataset))
-    
+
     log.info(f"Found {len(author_gobbler.authors)} authors")
     log.info(f"Found {len(papers)} papers")
 
@@ -240,7 +275,9 @@ if __name__ == "__main__":
 
     parser.add_argument("folder", help="Folder containing the iris data", type=Path)
     parser.add_argument("--output_file", help="Output file", type=Path, default=None)
-    parser.add_argument("-v", "--verbose", action = "count", default = 0, help = "Increase verbosity")
+    parser.add_argument(
+        "-v", "--verbose", action="count", default=0, help="Increase verbosity"
+    )
 
     args = parser.parse_args()
 

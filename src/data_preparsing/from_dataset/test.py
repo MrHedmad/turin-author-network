@@ -30,12 +30,10 @@ with Path(out_nw).open("w+") as nwstream:
             nwstream.write(f"{combo[0]}, {combo[1]}\n")
 
         if len(authors) > 100_000:
-            with Path(out_authors.format(n = authors_n)).open("w+") as auth_stream:
-                json.dump(authors, auth_stream, indent = 4)
+            with Path(out_authors.format(n=authors_n)).open("w+") as auth_stream:
+                json.dump(authors, auth_stream, indent=4)
             authors = {}
             authors_n += 1
 
 with Path(out_authors).open("w+") as auth_stream:
-    json.dump(authors, auth_stream, indent = 4)
-
-
+    json.dump(authors, auth_stream, indent=4)

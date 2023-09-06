@@ -23,8 +23,9 @@ FILTERS = {
         remove_single_author_papers,
     ],
     "authors": [],
-    "both": []
+    "both": [],
 }
+
 
 def apply_filters(data: dict, filters: list) -> dict:
     for filter in filters["papers"]:
@@ -36,8 +37,8 @@ def apply_filters(data: dict, filters: list) -> dict:
 
     return data
 
-def main(input_stream: IOBase, output_stream: IOBase) -> None:
 
+def main(input_stream: IOBase, output_stream: IOBase) -> None:
     data = json.load(input_stream)
     # TODO: Add a way to select which filters to apply
     data = apply_filters(data, FILTERS)
@@ -50,12 +51,16 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--input_file", help="Input file to process", type=Path, default = None)
-    parser.add_argument("--output_file", help="Output file to process", type=Path, default = None)
+    parser.add_argument(
+        "--input_file", help="Input file to process", type=Path, default=None
+    )
+    parser.add_argument(
+        "--output_file", help="Output file to process", type=Path, default=None
+    )
 
     args = parser.parse_args()
 
     input_stream = args.input_file.open("r") if args.input_file else sys.stdin
     output_stream = args.output_file.open("w+") if args.output_file else sys.stdout
-    
+
     main(input_stream, output_stream)
