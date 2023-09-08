@@ -41,7 +41,8 @@ class Author:
             else None
         )
         self.department = (
-            department.lower().strip() if department and pd.notna(department) else None
+            # Sanitize the department's " since they will fuck up later
+            department.lower().strip().replace('"', '') if department and pd.notna(department) else None
         )
         self.id = id or str(uuid4())
 
