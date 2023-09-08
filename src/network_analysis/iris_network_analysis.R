@@ -73,10 +73,13 @@ filter_graph <- function(graph, selected_deps, keep_only_major = TRUE) {
 }
 
 find_communities <- function(graph) {
+  expected_comms <- length(levels(as.factor(
+    igraph::vertex_attr(graph, "department")
+  )))
+  print(paste0("Finding ", expected_comms, " communities..."))
   #' Add community info to the graph.
-  communities <- igraph::cluster_walktrap(
-    graph, weights = igraph::edge_attr(graph, "weight"),
-    steps = 5
+  communities <- igraph::cluster_spinglass(
+    graph, spins = expected_comms
   )
   
   graph <- igraph::set_vertex_attr(
@@ -134,7 +137,8 @@ plot_graph <- function(
   if (include_communities) {
     p <- p + ggforce::geom_mark_hull(
       aes(x, y, fill = as.factor(community)),
-      alpha = 0.1
+      alpha = 0.1,
+      show.legend = FALSE
     )
   }
   
@@ -213,17 +217,124 @@ selected_departments <- list(
   #"scienze veterinarie" = c("veterinaria", "darkolivegreen1")
 )
 
-graph <- filter_graph(graph, selected_departments)
-graph <- find_communities(graph)
+selected_departments_biology <- list(
+  "biotecnologie molecolari e scienze per la salute" = c("biotech. mol.", "blue"),
+  "centro interdipartimentale di ricerca per le biotecnologie molecolari - mbc" = c("MBC", "limegreen"), 
+  "neuroscienze rita levi montalcini" = c("neuroscienze", "pink"), 
+  "oncologia" = c(NA, "yellow"),
+  "psicologia" = c(NA, "magenta"),
+  "scienze agrarie, forestali e alimentari" = c("agraria", "purple4"),
+  #"scienze cliniche e biologiche" = c("clinica", "yellow"),
+  "scienze della terra" = c(NA, "darkseagreen"),
+  "scienze della vita e biologia dei sistemi" = c("DBioS", "red"),
+  "scienze veterinarie" = c("veterinaria", "orange")
+)
+
+hard_graph <- filter_graph(graph, selected_departments)
+hard_graph <- find_communities(hard_graph)
 
 # If 'weights' is NULL uses the weights in the graph
 layout <- graphlayouts::layout_with_sparse_stress(
-  graph, weights = NULL, pivots = 50
+  hard_graph, weights = NULL, pivots = 50
 )
 plot_graph(
-  graph, selected_departments, layout = layout,
+  hard_graph, selected_departments, layout = layout,
   include_labels = TRUE,
   label_size_treshold = 40,
   include_communities = FALSE,
   title = "Sample network - years 2012/13/14"
 )
+
+bio_graph <- filter_graph(graph, selected_departments_biology)
+bio_graph <- find_communities(bio_graph)
+
+# If 'weights' is NULL uses the weights in the graph
+layout <- igraph::layout_with_dh(
+  bio_graph
+)
+plot_graph(
+  bio_graph, selected_departments_biology, layout = layout,
+  include_labels = TRUE,
+  label_size_treshold = 40,
+  include_communities = FALSE,
+  title = "Sample network - biological area - years 2012/13/14"
+)
+
+
+## --- Community purity
+get_community_purity <- function(graph) {
+  data <- as.data.frame(cbind(
+    community = igraph::vertex_attr(graph, "community"),
+    department = igraph::vertex_attr(graph, "department")
+  ))
+  
+  counts <- data |> group_by(community, department) |>
+    count()
+  
+  counts
+}
+
+plot_purity <- function(purity, selected_departments) {
+  
+  # Relevel the departments
+  purity$department <- unlist(map(
+    purity$department,
+    \(x) {
+      new_name <- selected_departments[[x]][1]
+      return(ifelse(is.na(new_name), x, new_name))
+    }
+  ))
+  graph_colors <- map(selected_departments, \(x) {x[2]})
+  new_names <- map(selected_departments, \(x) {x[1]})
+  names(graph_colors) <- ifelse(
+    is.na(new_names),
+    names(selected_departments),
+    new_names
+  )
+
+  p <- ggplot(data = purity, aes(x = community, y = n, fill = department)) +
+    geom_bar(position = "fill", stat = "identity") +
+    scale_fill_manual(values = graph_colors)
+  p
+}
+
+bio_purity <- get_community_purity(bio_graph)
+plot_purity(bio_purity, selected_departments_biology)
+
+plot_purity_dots <- function(purity, selected_departments) {
+  # Relevel the departments
+  purity$department <- unlist(map(
+    purity$department,
+    \(x) {
+      new_name <- selected_departments[[x]][1]
+      return(ifelse(is.na(new_name), x, new_name))
+    }
+  ))
+  graph_colors <- map(selected_departments, \(x) {x[2]})
+  new_names <- map(selected_departments, \(x) {x[1]})
+  names(graph_colors) <- ifelse(
+    is.na(new_names),
+    names(selected_departments),
+    new_names
+  )
+  
+  var_calc <- function(n) {
+    n <- scale(n, center = FALSE)
+    new <- c()
+    for (i in seq_along(n)) {
+      new <- c(new, var(n) - var(n[-i]))
+    }
+    new
+  }
+  purity |> group_by(department) |> mutate(variance = var_calc(n)) -> purity
+  
+  p <- ggplot(data = purity, aes(x = n, y = variance)) +
+    geom_point(aes(color = department, size = n)) +
+    scale_color_manual(values = graph_colors) +
+    theme_minimal() +
+    theme(legend.position = "bottom")
+  
+  p
+}
+
+plot_purity_dots(bio_purity, selected_departments_biology)
