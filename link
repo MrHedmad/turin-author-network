@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -e
+
+if [ $# -lt 1 ]; then
+    echo "Insufficient args. Usage: link DATA_FOLDER"
+    exit 1
+fi
+
+name="collaboration_network"
+
+# This is ugly but bear with me
+echo "WARNING: This script should be run from the root of the repo (e.g. in $name/)"
+echo -n "Linking in 5 seconds"
+sleep 1
+echo -n "."
+sleep 1
+echo -n "."
+sleep 1
+echo -n "."
+sleep 1
+echo -n "."
+sleep 1
+echo "."
+
+real=$(realpath $1)
+
+echo "Linking $real/$name to ./data..."
+mkdir -p "$real/$name"
+ln -s "$real/$name" ./data
+
+echo "Linking $real/$name/out/figures to ./paper/src/resources/images/generated..."
+mkdir -p "$real/$name/out/figures"
+mkdir -p ./paper/src/resources/images
+ln -s "$real/$name/out/figures" ./paper/src/resources/images/generated
+
+echo "Finished linking!"

@@ -1,3 +1,6 @@
+data/
+paper/src/resources/images/generated
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
