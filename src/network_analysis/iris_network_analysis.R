@@ -57,7 +57,7 @@ filter_graph <- function(graph, selected_deps, keep_only_major = TRUE) {
   sgraph <- igraph::subgraph(
     graph,
     # Why does this work? No idea.
-    igraph::V(graph)[ department %in% names(selected_deps) ]
+    igraph::V(graph)[ department %in% names(selected_deps)]
   )
   
   # Get rid of small components
@@ -76,6 +76,9 @@ find_communities <- function(graph) {
   expected_comms <- length(levels(as.factor(
     igraph::vertex_attr(graph, "department")
   )))
+  if (expected_comms == 1) {
+    expected_comms <- 2
+  }
   print(paste0("Finding ", expected_comms, " communities..."))
   #' Add community info to the graph.
   communities <- igraph::cluster_spinglass(
@@ -109,6 +112,7 @@ plot_graph <- function(
   include_communities = TRUE
   
 ) {
+  
   graph_degree <- igraph::degree(graph)
   
   # Relevel the departments
@@ -176,12 +180,15 @@ plot_graph <- function(
 ### ---
 
 # Params - before I make it executable
-edgelist_path <- "/tmp/test_edgelist.csv"
-authors_path <- "/tmp/test_authors.csv"
+edgelist_path <- "./data/edgelist.csv"
+authors_path <- "./data/authors.csv"
 
 # Data loading
 edgelist <- read_csv(edgelist_path)
 authors <- read_csv(authors_path, na = c("Null", "null", "na", "NA", "None", "none"))
+
+# Edit the authors with no department to have "unknown" department
+authors$department[is.na(authors$department)] <- "unknown"
 
 graph <- graph_from_edgelist(edgelist, authors)
 
@@ -203,9 +210,9 @@ selected_departments <- list(
   "informatica" = c(NA, "lightblue"),
   "matematica giuseppe peano" = c("matematica", "purple"),
   "neuroscienze rita levi montalcini" = c("neuroscienze", "pink"), 
-  "oncologia" = c(NA, "gray"),
+  "oncologia" = c(NA, "brown"),
   "psicologia" = c(NA, "magenta"),
-  "scienza e tecnologia del farmaco" = c("farmacologia", "darkorange4"), 
+  "scienza e tecnologia del farmaco" = c("farmacologia", "darkorange2"), 
   #"scienze agrarie, forestali e alimentari" = c("agraria", "darkseagreen"),
   #"scienze chirurgiche" = c("chirurgia", "cyan"), 
   "scienze cliniche e biologiche" = c("clinica", "yellow"),
@@ -214,7 +221,8 @@ selected_departments <- list(
   "scienze della vita e biologia dei sistemi" = c("DBioS", "red"), 
   #"scienze economico-sociali e matematico-statistiche" = c("economia e statistica", "deepskyblue"),
   "scienze mediche" = c("medicina", "darkturquoise")
-  #"scienze veterinarie" = c("veterinaria", "darkolivegreen1")
+  #"scienze veterinarie" = c("veterinaria", "darkolivegreen1"),
+  #"unknown" = c(NA, "darkgray")
 )
 
 selected_departments_biology <- list(
@@ -224,10 +232,11 @@ selected_departments_biology <- list(
   "oncologia" = c(NA, "yellow"),
   "psicologia" = c(NA, "magenta"),
   "scienze agrarie, forestali e alimentari" = c("agraria", "purple4"),
-  #"scienze cliniche e biologiche" = c("clinica", "yellow"),
+  "scienze cliniche e biologiche" = c("clinica", "brown"),
   "scienze della terra" = c(NA, "darkseagreen"),
   "scienze della vita e biologia dei sistemi" = c("DBioS", "red"),
   "scienze veterinarie" = c("veterinaria", "orange")
+  #"unknown" = c(NA, "darkgray")
 )
 
 hard_graph <- filter_graph(graph, selected_departments)
@@ -235,14 +244,14 @@ hard_graph <- find_communities(hard_graph)
 
 # If 'weights' is NULL uses the weights in the graph
 layout <- graphlayouts::layout_with_sparse_stress(
-  hard_graph, weights = NULL, pivots = 50
+  hard_graph, weights = NULL, pivots = 25
 )
 plot_graph(
   hard_graph, selected_departments, layout = layout,
   include_labels = TRUE,
   label_size_treshold = 40,
   include_communities = FALSE,
-  title = "Sample network - years 2012/13/14"
+  title = "Sample network"
 )
 
 bio_graph <- filter_graph(graph, selected_departments_biology)
@@ -257,7 +266,27 @@ plot_graph(
   include_labels = TRUE,
   label_size_treshold = 40,
   include_communities = FALSE,
-  title = "Sample network - biological area - years 2012/13/14"
+  title = "Sample network - biological area"
+)
+
+
+selected_departments_just_one <- list(
+  "scienze della vita e biologia dei sistemi" = c("DBioS", "red"),
+  "unknown" = c(NA, "darkgray")
+)
+one_graph <- filter_graph(graph, selected_departments_just_one)
+one_graph <- find_communities(one_graph)
+
+# If 'weights' is NULL uses the weights in the graph
+layout <- graphlayouts::layout_with_sparse_stress(
+  one_graph, weights = NULL, pivots = 25
+)
+plot_graph(
+  one_graph, selected_departments_just_one, layout = layout,
+  include_labels = TRUE,
+  label_size_treshold = 40,
+  include_communities = FALSE,
+  title = "Sample network - biological area"
 )
 
 
@@ -293,7 +322,7 @@ plot_purity <- function(purity, selected_departments) {
   )
 
   p <- ggplot(data = purity, aes(x = community, y = n, fill = department)) +
-    geom_bar(position = "fill", stat = "identity") +
+    geom_bar(position = "stack", stat = "identity") +
     scale_fill_manual(values = graph_colors)
   p
 }
@@ -319,17 +348,23 @@ plot_purity_dots <- function(purity, selected_departments) {
   )
   
   var_calc <- function(n) {
-    n <- scale(n, center = FALSE)
     new <- c()
     for (i in seq_along(n)) {
       new <- c(new, var(n) - var(n[-i]))
     }
-    new
+    max(new)
   }
-  purity |> group_by(department) |> mutate(variance = var_calc(n)) -> purity
   
-  p <- ggplot(data = purity, aes(x = n, y = variance)) +
-    geom_point(aes(color = department, size = n)) +
+  purity |> filter(department != "unknown") |>
+    group_by(department) |> summarize(
+      variance = var_calc(n),
+      numerosity = sum(n)
+    ) -> purity
+  
+  print(purity)
+  
+  p <- ggplot(data = purity, aes(x = numerosity, y = variance)) +
+    geom_point(aes(color = department, size = 2)) +
     scale_color_manual(values = graph_colors) +
     theme_minimal() +
     theme(legend.position = "bottom")
@@ -338,3 +373,8 @@ plot_purity_dots <- function(purity, selected_departments) {
 }
 
 plot_purity_dots(bio_purity, selected_departments_biology)
+
+
+hard_purity <- get_community_purity(hard_graph)
+plot_purity(hard_purity, selected_departments)
+plot_purity_dots(hard_purity, selected_departments)
