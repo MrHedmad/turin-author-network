@@ -28,6 +28,7 @@ In particular, we posed the following questions:
 - Can we detect tightly-knit groups of researchers (i.e. research groups)?
 - Do departments collaborate more within themselves or with other departments?
 - Are some departments more fragmented than others? I.e. are they split into many small groups, or are they more cohesive?
+- How do these patterns evolve through time?
 
 = Data Source
 We sourced the data by contacting directly the #acr("IRIS") office of the university.
@@ -106,6 +107,8 @@ It may be calculated in two ways:
 
 As a first pass, the weight statistic is calculated using the second method.
 This should result in a network that should give less emphasis to large teams, or very large collaborations, and more emphasis on smaller but frequent collaborations.
+
+As we wanted to look at the evolution of the network through time, we generated many networks, one for each pair of years. For example, there is a network for the years 2012-2013, 2013-2014, and so on.
 
 = Network analysis
 The network is analyzed using the `igraph` library in R.
