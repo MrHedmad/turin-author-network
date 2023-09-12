@@ -1,181 +1,18 @@
+#' This is the code for the network analysis of the Turin author network
+#' For this to work, you must set the working directory to be in the root
+#' of the repository (i.e. ./turin-author-network/). The calls to source()
+#' and the data loading are relative to that position.
 library(tidyverse)
 library(ggraph)
 requireNamespace("igraph")
 requireNamespace("oaqc")
-
-graph_from_edgelist <- function(edgelist, author_list, standardise_weigths = FALSE) {
-  # Create the full author name, for labeling later
-  authors$full_name <- paste(authors$name, authors$surname)
-  authors$full_name <- str_squish(authors$full_name) |> str_to_title()
-  
-  if (standardise_weigths) {
-    edgelist$weight <- scale(edgelist$weight, center = FALSE)
-  }
-  
-  graph <- igraph::graph_from_data_frame(edgelist, directed = FALSE)
-  
-  # Add vertex information, like author names and department of origin
-  graph <- igraph::set_vertex_attr(
-    graph,
-    "display_name",
-    value = unlist(map(
-      igraph::vertex_attr(graph, "name"), # This gets the IDs of the nodes
-      \(x) {authors$full_name[which(authors$id == x)]}
-    ))
-  )
-  
-  graph <- igraph::set_vertex_attr(
-    graph,
-    "department",
-    value = unlist(map(
-      igraph::vertex_attr(graph, "name"), # same as before
-      \(x) {authors$department[which(authors$id == x)]}
-    ))
-  )
-  
-  if (! igraph::is_simple(graph)) {
-    warning("Graph is not simple. Will simplify.")
-    
-    graph <- igraph::simplify(
-      # Sum the weights of the parallel edges, ignore other attributes
-      graph, list(weight="sum", "ignore")
-    )
-  }
-  
-  graph
-}
-
-
-filter_graph <- function(graph, selected_deps, keep_only_major = TRUE) {
-  #' Filter the graph to make it more manageable
-  #' 
-  #' @param graph The graph to filter.
-  #' @param selected_deps A list of names = c(new_name, color), whose names
-  #'  will be extracted to be used for selecting vertices.
-  #' @param keep_only_major Keep only the major component? Default TRUE.
-  
-  sgraph <- igraph::subgraph(
-    graph,
-    # Why does this work? No idea.
-    igraph::V(graph)[ department %in% names(selected_deps)]
-  )
-  
-  # Get rid of small components
-  if (keep_only_major) {
-    comps <- igraph::components(sgraph)
-    sgraph <- igraph::subgraph(
-      sgraph,
-      names(comps$membership[comps$membership == 1])
-    )
-  }
-  
-  sgraph
-}
-
-find_communities <- function(graph) {
-  expected_comms <- length(levels(as.factor(
-    igraph::vertex_attr(graph, "department")
-  )))
-  if (expected_comms == 1) {
-    expected_comms <- 2
-  }
-  print(paste0("Finding ", expected_comms, " communities..."))
-  #' Add community info to the graph.
-  communities <- igraph::cluster_spinglass(
-    graph, spins = expected_comms
-  )
-  
-  graph <- igraph::set_vertex_attr(
-    graph,
-    "community",
-    value = unlist(map(
-      igraph::vertex_attr(graph, "name"),
-      \(x) {communities$membership[which(communities$names == x)]}
-    ))
-  )
-  
-  graph
-}
-
-plot_graph <- function(
-  graph,
-  selected_departments,
-  layout,
-  
-  title = NA,
-  
-  show_legend = TRUE,
-  
-  include_labels = TRUE,
-  label_size_treshold = 15,
-  
-  include_communities = TRUE
-  
-) {
-  
-  graph_degree <- igraph::degree(graph)
-  
-  # Relevel the departments
-  graph <- igraph::set_vertex_attr(
-    graph,
-    "department",
-    value = unlist(map(
-      igraph::vertex_attr(graph, "department"),
-      \(x) {
-        new_name <- selected_departments[[x]][1]
-        return(ifelse(is.na(new_name), x, new_name))
-      }
-    ))
-  )
-  
-  graph_colors <- map(selected_departments, \(x) {x[2]})
-  new_names <- map(selected_departments, \(x) {x[1]})
-  names(graph_colors) <- ifelse(
-    is.na(new_names),
-    names(selected_departments),
-    new_names
-  )
-  
-  p <- ggraph(graph, layout = layout)
-  
-  if (include_communities) {
-    p <- p + ggforce::geom_mark_hull(
-      aes(x, y, fill = as.factor(community)),
-      alpha = 0.1,
-      show.legend = FALSE
-    )
-  }
-  
-  # I want the layer with the communities to be BELOW the actual network
-  # This is why this is done like this.
-  p <- p + geom_edge_link(aes(alpha = (weight / 100)), show.legend = FALSE) + 
-    geom_node_point(
-      aes(
-        size = graph_degree / (max(graph_degree) / 0.75),
-        color = department
-      ), alpha = 0.5,
-    ) +
-    guides(size = "none") +
-    scale_color_manual(values = graph_colors) +
-    theme_void() +
-    theme(legend.position = ifelse(show_legend, "bottom", "none"))
-  
-  # But I want the labels on top of everything
-  if (include_labels) {
-    # We need to get rid of the names that we do not want
-    p <- p + geom_node_label(
-      aes(filter = graph_degree > label_size_treshold, label = display_name),
-      repel = TRUE, size = 2,
-      min.segment.length = 0, max.overlaps = 50
-    )
-  }
-  
-  if (!is.na(title)) {
-    p <- p + ggtitle(title)
-  }
-  
-  p
-}
+# TODO: Some deps for igraph (especially the layout functions) might be
+# missing.
+# NOTE: To install `concaveman`, to plot the communities, use:
+# Sys.setenv(DOWNLOAD_STATIC_LIBV8 = 1)
+# install.packages("concaveman")
+# this only works if you are using linux.
+source("./src/network_analysis/iris_network_analysis_functions.R")
 
 ### ---
 
@@ -187,9 +24,6 @@ authors_path <- "./data/authors.csv"
 edgelist <- read_csv(edgelist_path)
 authors <- read_csv(authors_path, na = c("Null", "null", "na", "NA", "None", "none"))
 
-# Edit the authors with no department to have "unknown" department
-authors$department[is.na(authors$department)] <- "unknown"
-
 graph <- graph_from_edgelist(edgelist, authors)
 
 ## Inspect what departments are available:
@@ -200,7 +34,10 @@ graph <- graph_from_edgelist(edgelist, authors)
 # department, to be shown in the legend.
 # The structure is list(old_name = c(new_name, color))
 # Note some (like "giurisprudenza") are missing. See above for the full list.
-# TODO: Export this to a config file
+# TODO: Export this to a config file (maybe)?
+
+## A list of "hard science" departments, to use a derogatory term.
+# I leave some commented if we want to include them later.
 selected_departments <- list(
   "biotecnologie molecolari e scienze per la salute" = c("biotech. mol.", "darkgreen"),
   "centro interdipartimentale di ricerca per le biotecnologie molecolari - mbc" = c("MBC", "limegreen"), 
@@ -225,6 +62,7 @@ selected_departments <- list(
   #"unknown" = c(NA, "darkgray")
 )
 
+# Same as above, but limited to the biological/biomedical areas
 selected_departments_biology <- list(
   "biotecnologie molecolari e scienze per la salute" = c("biotech. mol.", "blue"),
   "centro interdipartimentale di ricerca per le biotecnologie molecolari - mbc" = c("MBC", "limegreen"), 
@@ -239,142 +77,69 @@ selected_departments_biology <- list(
   #"unknown" = c(NA, "darkgray")
 )
 
+# Generate the subgraphs, and add information about communities.
 hard_graph <- filter_graph(graph, selected_departments)
 hard_graph <- find_communities(hard_graph)
-
-# If 'weights' is NULL uses the weights in the graph
-layout <- graphlayouts::layout_with_sparse_stress(
-  hard_graph, weights = NULL, pivots = 25
-)
-plot_graph(
-  hard_graph, selected_departments, layout = layout,
-  include_labels = TRUE,
-  label_size_treshold = 40,
-  include_communities = FALSE,
-  title = "Sample network"
-)
 
 bio_graph <- filter_graph(graph, selected_departments_biology)
 bio_graph <- find_communities(bio_graph)
 
-# If 'weights' is NULL uses the weights in the graph
-layout <- igraph::layout_with_dh(
-  bio_graph
+
+## PLOTTING GRAPHS
+# If 'weights' is NULL the function uses weights in the graph
+hard_layout <- graphlayouts::layout_with_sparse_stress(
+  hard_graph, weights = NULL, pivots = 25
+)
+plot_graph(
+  hard_graph, selected_departments, hard_layout,
+  include_labels = FALSE,
+  label_degree_treshold = 40,
+  include_communities = FALSE,
+  title = "Sample network"
+)
+
+# Using igraph::layout_with_dh() is prettier, but takes a very, very long time
+layout <- graphlayouts::layout_with_sparse_stress(
+  bio_graph, weights = NULL, pivots = 25
 )
 plot_graph(
   bio_graph, selected_departments_biology, layout = layout,
   include_labels = TRUE,
-  label_size_treshold = 40,
+  label_degree_treshold = 40,
   include_communities = FALSE,
   title = "Sample network - biological area"
 )
 
 
-selected_departments_just_one <- list(
-  "scienze della vita e biologia dei sistemi" = c("DBioS", "red"),
-  "unknown" = c(NA, "darkgray")
+# Inspect single departments
+inspect_one(
+  graph,
+  "scienze della vita e biologia dei sistemi",
+  "DBios",
+  walk = TRUE,
+  label_degree_treshold = 0
+) 
+inspect_one(graph, "psicologia", NA, "blue")
+inspect_one(graph, "fisica", NA, "orange", label_degree_treshold = 2)
+inspect_one(graph, "oncologia", NA, "purple", label_degree_treshold = 2)
+inspect_one(graph, "studi umanistici", NA, "yellow", label_degree_treshold = 2)
+inspect_one(
+  graph, "scienze mediche", NA, "yellow", label_degree_treshold = 2,
+  override_communities = 2
 )
-one_graph <- filter_graph(graph, selected_departments_just_one)
-one_graph <- find_communities(one_graph)
-
-# If 'weights' is NULL uses the weights in the graph
-layout <- graphlayouts::layout_with_sparse_stress(
-  one_graph, weights = NULL, pivots = 25
-)
-plot_graph(
-  one_graph, selected_departments_just_one, layout = layout,
-  include_labels = TRUE,
-  label_size_treshold = 40,
-  include_communities = FALSE,
-  title = "Sample network - biological area"
-)
-
 
 ## --- Community purity
-get_community_purity <- function(graph) {
-  data <- as.data.frame(cbind(
-    community = igraph::vertex_attr(graph, "community"),
-    department = igraph::vertex_attr(graph, "department")
-  ))
-  
-  counts <- data |> group_by(community, department) |>
-    count()
-  
-  counts
-}
-
-plot_purity <- function(purity, selected_departments) {
-  
-  # Relevel the departments
-  purity$department <- unlist(map(
-    purity$department,
-    \(x) {
-      new_name <- selected_departments[[x]][1]
-      return(ifelse(is.na(new_name), x, new_name))
-    }
-  ))
-  graph_colors <- map(selected_departments, \(x) {x[2]})
-  new_names <- map(selected_departments, \(x) {x[1]})
-  names(graph_colors) <- ifelse(
-    is.na(new_names),
-    names(selected_departments),
-    new_names
-  )
-
-  p <- ggplot(data = purity, aes(x = community, y = n, fill = department)) +
-    geom_bar(position = "stack", stat = "identity") +
-    scale_fill_manual(values = graph_colors)
-  p
-}
-
 bio_purity <- get_community_purity(bio_graph)
 plot_purity(bio_purity, selected_departments_biology)
 
-plot_purity_dots <- function(purity, selected_departments) {
-  # Relevel the departments
-  purity$department <- unlist(map(
-    purity$department,
-    \(x) {
-      new_name <- selected_departments[[x]][1]
-      return(ifelse(is.na(new_name), x, new_name))
-    }
-  ))
-  graph_colors <- map(selected_departments, \(x) {x[2]})
-  new_names <- map(selected_departments, \(x) {x[1]})
-  names(graph_colors) <- ifelse(
-    is.na(new_names),
-    names(selected_departments),
-    new_names
-  )
-  
-  var_calc <- function(n) {
-    new <- c()
-    for (i in seq_along(n)) {
-      new <- c(new, var(n) - var(n[-i]))
-    }
-    max(new)
-  }
-  
-  purity |> filter(department != "unknown") |>
-    group_by(department) |> summarize(
-      variance = var_calc(n),
-      numerosity = sum(n)
-    ) -> purity
-  
-  print(purity)
-  
-  p <- ggplot(data = purity, aes(x = numerosity, y = variance)) +
-    geom_point(aes(color = department, size = 2)) +
-    scale_color_manual(values = graph_colors) +
-    theme_minimal() +
-    theme(legend.position = "bottom")
-  
-  p
-}
-
 plot_purity_dots(bio_purity, selected_departments_biology)
-
 
 hard_purity <- get_community_purity(hard_graph)
 plot_purity(hard_purity, selected_departments)
 plot_purity_dots(hard_purity, selected_departments)
+
+
+## Network Degree
+plot_degree_distribution(graph, loglog = FALSE)
+plot_degree_distribution(hard_graph, loglog = TRUE)
+plot_degree_distribution(bio_graph, loglog = FALSE)
