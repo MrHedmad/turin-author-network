@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+"""This script converts a series of IRIS tables to a json digest"""
 from __future__ import annotations
 
 import pandas as pd
@@ -15,7 +17,6 @@ import numpy as np
 import sys
 
 logging.basicConfig(level=logging.INFO)
-
 log = logging.getLogger(__name__)
 
 
@@ -42,7 +43,9 @@ class Author:
         )
         self.department = (
             # Sanitize the department's " since they will fuck up later
-            department.lower().strip().replace('"', '') if department and pd.notna(department) else None
+            department.lower().strip().replace('"', "")
+            if department and pd.notna(department)
+            else None
         )
         self.id = id or str(uuid4())
 
@@ -65,7 +68,7 @@ class Author:
         """Return the distance between this author and the other, ignoring the ID"""
         # This is a weighted average, were we give more importance to the name and surname
         # The rationale is that the affiliation and department are more likely to change
-        # between roles
+        # between roles than your name or surname. This might not be optimal?
         return (
             jws(self.name or "", other.name or "")
             + jws(self.surname or "", other.surname or "")
@@ -294,3 +297,4 @@ if __name__ == "__main__":
 
     output_stream = args.output_file.open("w+") if args.output_file else sys.stdout
     main(args.folder, output_stream)
+

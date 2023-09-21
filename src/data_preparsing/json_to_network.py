@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import json
 from pathlib import Path
 from io import IOBase
@@ -5,15 +7,19 @@ import sys
 from enum import Enum
 from itertools import combinations
 
+
 # The json structure is the one in the other file,
 # i'm not copying the classes here, I'm not sure they are super necessary
+# And in any case, they would be just for typing...
 class WeightStrategy(Enum):
     UNWEIGTHED = "unweigthed"
     LINEAR = "linear"
     PAPER_SIZE_MODERATED = "paper_size_moderated"
 
+
 def make_edgelist(papers: list[dict], strategy: WeightStrategy) -> list[str]:
-    # This is very slow
+    # TODO: This is very slow - please make me faster.
+    # But it seems I'm fast enough for most networks.
     edges = {}
 
     for paper in papers:
@@ -21,12 +27,12 @@ def make_edgelist(papers: list[dict], strategy: WeightStrategy) -> list[str]:
         # if the input is sorted, and we want unique indexes for each
         # pair of author (edge). Having the sorted indexes be their new ID
         # should ensure this is the case
-        authors = sorted(paper['authors'])
+        authors = sorted(paper["authors"])
         for combo in combinations(authors, 2):
             # I use this ID format so its easy to pass it to .csv
             id = f'"{combo[0]}","{combo[1]}"'
             old_value = edges.get(id, 0)
-            
+
             if strategy == WeightStrategy.UNWEIGTHED:
                 edges[id] = 1
             elif strategy == WeightStrategy.LINEAR:
@@ -50,8 +56,10 @@ def make_authorlist(authors: list[dict]) -> list[str]:
 
 
 def main(
-    input_stream: IOBase, output_edgelist_stream: IOBase, output_authors_stream: IOBase,
-    weigth_strategy: WeightStrategy
+    input_stream: IOBase,
+    output_edgelist_stream: IOBase,
+    output_authors_stream: IOBase,
+    weigth_strategy: WeightStrategy,
 ) -> None:
     data = json.load(input_stream)
 
@@ -60,11 +68,12 @@ def main(
 
     output_edgelist_stream.writelines("node_1,node_2,weight\n")
     output_edgelist_stream.writelines([f"{x}\n" for x in edgelist])
-    
+
     output_authors_stream.writelines("name,surname,affiliation,department,id\n")
     output_authors_stream.writelines([f"{x}\n" for x in authors_list])
 
     return None
+
 
 if __name__ == "__main__":
     import argparse
@@ -89,5 +98,9 @@ if __name__ == "__main__":
     output_edgelist_stream = args.output_edgelist.open("w+")
     output_authors_stream = args.output_authors.open("w+")
 
-    main(input_stream, output_edgelist_stream, output_authors_stream, WeightStrategy(args.weight_strategy))
-
+    main(
+        input_stream,
+        output_edgelist_stream,
+        output_authors_stream,
+        WeightStrategy(args.weight_strategy),
+    )
