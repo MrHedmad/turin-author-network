@@ -10,7 +10,7 @@ env/touchfile: requirements.txt
 	touch env/touchfile
 
 ./data/iris_data.json: env/touchfile
-	. env/bin/activate; python src/data_preparsing/from_iris/iris_to_json.py \
+	. env/bin/activate; python src/data_preparsing/iris_to_json.py \
 		./data/in/papers > $@
 
 ALL += ./data/edgelist.csv
@@ -26,3 +26,4 @@ all: $(ALL)
 .PHONY = $(PHONY)
 
 .DEFAULT_GOAL = all
+
