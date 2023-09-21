@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TextIO
 from uuid import uuid4
 from jellyfish import jaro_winkler_similarity as jws
 from io import StringIO, IOBase
@@ -152,20 +152,19 @@ def parse_file_simple(gobbler: AuthorGlobber, data: pd.DataFrame) -> list[Paper]
     return papers
 
 
-def read_iris_data(path: Path) -> pd.DataFrame:
+def read_iris_data(stream: TextIO) -> pd.DataFrame:
     """Read the iris data from the given path"""
-    log.info(f"Reading {path} to an IRIS dataset")
+    log.info(f"Reading a file to an IRIS dataset")
     # Edit the header
     data = StringIO()
-    with path.open("r") as stream:
-        reader = csv.reader(stream)
-        header = next(reader)
-        header = [standardize_header(head.strip('"')) for head in header]
+    reader = csv.reader(stream)
+    header = next(reader)
+    header = [standardize_header(head.strip('"')) for head in header]
 
-        data.write(",".join(header) + "\n")
+    data.write(",".join(header) + "\n")
 
-        for line in stream:
-            data.write(line)
+    for line in stream:
+        data.write(line)
 
     data.seek(0)
 
@@ -247,10 +246,9 @@ class NpEncoder(json.JSONEncoder):
         return super(NpEncoder, self).default(obj)
 
 
-def main(folder: Path, output_steam: IOBase):
-    files = list(folder.glob("*.csv"))
-    log.info(f"Found {len(files)} files. Reading them in...")
-    datasets = [read_iris_data(path) for path in files]
+def main(files: list[TextIO], output_steam: IOBase):
+    log.info(f"Parsing {len(files)} files. Reading them in...")
+    datasets = [read_iris_data(stream) for stream in files]
 
     author_gobbler = AuthorGlobber()
     papers = []
@@ -277,8 +275,19 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("folder", help="Folder containing the iris data", type=Path)
-    parser.add_argument("--output_file", help="Output file", type=Path, default=None)
+    parser.add_argument(
+        "files",
+        help="File(s) to use as input. Space-delimited.",
+        type=argparse.FileType("r"),
+        default=[sys.stdin],
+        nargs="+",
+    )
+    parser.add_argument(
+        "--output_file",
+        help="Output file",
+        type=argparse.FileType("w"),
+        default=sys.stdout,
+    )
     parser.add_argument(
         "-v", "--verbose", action="count", default=0, help="Increase verbosity"
     )
@@ -295,6 +304,4 @@ if __name__ == "__main__":
         if args.verbose >= i:
             log.setLevel(level)
 
-    output_stream = args.output_file.open("w+") if args.output_file else sys.stdout
-    main(args.folder, output_stream)
-
+    main(args.files, args.output_file)
