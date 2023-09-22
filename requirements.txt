@@ -1,6 +1,7 @@
 black==23.7.0
 click==8.1.7
 jellyfish==1.0.0
+more-itertools==10.1.0
 mypy-extensions==1.0.0
 numpy==1.25.2
 packaging==23.1

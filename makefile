@@ -5,17 +5,15 @@ env: env/touchfile
 
 # The dot operator is the same as source, but it is the POSIX standard
 env/touchfile: requirements.txt
-	python -m venv env
+	python3.11 -m venv env
 	. env/bin/activate; pip install -Ur requirements.txt
 	touch env/touchfile
 
-./data/iris_data.json: env/touchfile
-	. env/bin/activate; python src/data_preparsing/iris_to_json.py \
-		./data/in/papers > $@
-
 TO_CLEAN += ./data/networks/all.flag
 ALL += ./data/networks/all.flag
-./data/networks/all.flag: env/touchfile ./data/years/all_years.flag
+./data/networks/all.flag: env/touchfile ./data/years/all_years.flag \
+		src/data_preparsing/json_to_network.py \
+		src/data_preparsing/filter_json.py
 	mkdir -p ${@D}
 	
 	. env/bin/activate; \
@@ -26,10 +24,11 @@ ALL += ./data/networks/all.flag
 		--weight_strategy paper_size_moderated
 
 TO_CLEAN += ./data/years/all_years.flag
-./data/years/all_years.flag: env/touchfile
+./data/years/all_years.flag: env/touchfile src/data_preparsing/group_files.py \
+		data/in/metadata.json src/data_preparsing/iris_to_json.py
 	mkdir -p ${@D}
 	. env/bin/activate; \
-	./src/data_preparsing/group_files.py ./data/in/metadata.json window 2 --sliding | \
+	./src/data_preparsing/group_files.py ./data/in/metadata.json window 3 --sliding | \
 		parallel --linebuffer -j 4 "./src/data_preparsing/iris_to_json.py {=uq=} -v > ${@D}/file_{%}.json" \	
 
 	touch $@
@@ -40,7 +39,8 @@ all: $(ALL)
 PHONY += clean
 clean:
 	rm -rf $(TO_CLEAN)
-
+	rm -rf ./data/years
+	rm -rf ./data/networks
 
 .PHONY = $(PHONY)
 
