@@ -395,7 +395,70 @@ plot_purity_dots <- function(purity, selected_departments) {
     geom_point(aes(color = department, size = 2)) +
     scale_color_manual(values = graph_colors) +
     theme_minimal() +
-    theme(legend.position = "bottom")
+    theme(legend.position = "bottom") +
+    ggtitle("Purity Dots - Variability Metric")
+  
+  p
+}
+
+
+plot_purity_dots2 <- function(purity, selected_departments) {
+  #' EXPERIMENTAL --
+  #' Plot the purity dots
+  #' 
+  #' @param purity A purity dataframe made by get_community_purity()
+  #' @param selected_departments A list of names = c(new_name, color), used
+  #'   for the color codes.
+  #'  
+  #' @returns A ggplot plot object
+  
+  # Relevel the departments + make graph colors (just like before)
+  purity$department <- unlist(map(
+    purity$department,
+    \(x) {
+      new_name <- selected_departments[[x]][1]
+      return(ifelse(is.na(new_name), x, new_name))
+    }
+  ))
+  graph_colors <- map(selected_departments, \(x) {x[2]})
+  new_names <- map(selected_departments, \(x) {x[1]})
+  names(graph_colors) <- ifelse(
+    is.na(new_names),
+    names(selected_departments),
+    new_names
+  )
+  
+  # TODO: This is the focal point - how to calculate the "groupdness" of the
+  # departments?
+  # Here I do a weird variance thing, but it seems that just var() works about
+  # as well to separate the dots.
+  # However - I want just the large numbers to weight on the stat, not the small
+  # ones (like calculating variance does). This does not do that.
+  
+  spread = function(n) {
+    tot = 0
+    for (riga in seq_along(n)) {
+      percentage = riga / sum(n) * 100
+      value = percentage**2
+      tot = sum(tot, value)
+    }
+    #tot = (tot - 1000) / 9000
+    tot
+  }  
+  purity |> filter(department != "unknown") |>
+    group_by(department) |> summarise(
+      compactness = spread(n),
+      compactness_scaled = (spread(n) - 1000) / 9000,
+      numerosity = sum(n)
+    ) -> purity
+  
+  p <- ggplot(data = purity, aes(x = numerosity, y = compactness)) +
+    geom_point(aes(color = department, size = 2)) +
+    scale_color_manual(values = graph_colors) +
+    scale_y_log10() +
+    theme_minimal() +
+    theme(legend.position = "bottom") +
+    ggtitle("Purity Dots - Compactdness Metric")
   
   p
 }
