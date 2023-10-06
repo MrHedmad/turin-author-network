@@ -176,6 +176,25 @@ get_community_purity <- function(graph) {
 }
 
 
+get_basic_statistics <- function(graph, name = "") {
+  assortativity <- igraph::assortativity.degree(graph, directed = FALSE)
+  num.nodes <- igraph::vcount(graph)
+  num.edges <- igraph::ecount(graph)
+  
+  components <- igraph::components(graph)
+  comp_table_str <- paste0(capture.output(
+    print(table(components$csize))
+  ), collapse = "\n")
+  
+  paste0(
+    ifelse(name != "", paste0("Graph ", name, "\n"), ""),
+    "A graph with |V|: ", num.nodes, " and |E|: ", num.edges, ".\n",
+    "Assortativity: ", assortativity, "\n",
+    "Number of components: ", components$no, "\n",
+    "Component size distribution: \n", comp_table_str, "\n"
+  )
+}
+
 ### PLOTTING ---
 plot_graph <- function(
     graph,
@@ -437,8 +456,8 @@ plot_purity_dots2 <- function(purity, selected_departments) {
   
   spread = function(n) {
     tot = 0
-    for (riga in seq_along(n)) {
-      percentage = riga / sum(n) * 100
+    for (item in n) {
+      percentage = item / sum(n) * 100
       value = percentage**2
       tot = sum(tot, value)
     }
@@ -553,11 +572,19 @@ inspect_one <- function(
     graphlayouts::layout_with_stress(one_graph)
   }
   
+  modularity_metric <- igraph::modularity(one_graph, igraph::vertex.attributes(one_graph)$community)
+  
   plot_graph(
     one_graph, selected_departments_just_one, layout = layout_one,
     include_labels = TRUE,
     label_degree_treshold = label_degree_treshold,
     include_communities = TRUE,
-    title = paste0("One network - ", short_name)
+    title = paste0(
+      "One network - ",
+      ifelse(is.na(short_name), department_name, short_name),
+      " - Modularity: ",
+      round(modularity_metric, digits = 2)
+    ),
+    show_legend = FALSE
   )
 }

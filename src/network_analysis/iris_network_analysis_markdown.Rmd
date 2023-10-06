@@ -14,39 +14,40 @@ library(ggraph)
 requireNamespace("igraph")
 requireNamespace("oaqc")
 requireNamespace("concaveman")
+
+# This source call reads in the `iris_network_analysis_functions.R` contents.
+# The path is passed as a param to allow the compilation of the document
+# both inside the Docker and locally.
 source(params$functions_path)
 ```
 
-This is the code for the network analysis of the Turin author network
-For this to work, you must set the working directory to be in the root
-of the repository (i.e. `./turin-author-network/`). The calls to `source()`
-and the data loading are relative to that position.
-
-```{r, include=FALSE}
-# TODO: Some deps for igraph (especially the layout functions) might be
-# missing.
-# NOTE: To install `concaveman`, to plot the communities, use:
-#Sys.setenv(DOWNLOAD_STATIC_LIBV8 = 1)
-#install.packages("concaveman")
-#library(concaveman)
-# this only works if you are using linux.
-```
+This is the code for the network analysis of the Turin Author Networks.
+Please read the README to learn more on what these analysis are doing.
 
 # Loading data
-Data comes from the Python pipeline.
+Data comes from the Python pipeline. Please read the general report for more information on the data preprocessing that occurred in Python prior to this analysis.
 
-```{r}
-# Data loading
+```{r read-input}
+# The edgelist is a csv with source, sink and weight columns.
+# `igraph` can just eat it as-is.
 edgelist <- read_csv(params$edgelist_path)
-authors <- read_csv(params$authors_path, na = c("Null", "null", "na", "NA", "None", "none"))
+authors <- read_csv(
+  params$authors_path,
+  na = c("Null", "null", "na", "NA", "None", "none")
+)
 graph <- graph_from_edgelist(edgelist, authors)
 
 fig_prefix <- str_split_1(params$edgelist_path, "/")
 fig_prefix <- fig_prefix[length(fig_prefix)]
+fig_prefix <- str_split_i(fig_prefix, "_", 2) |> str_split_i("\\.", 1)
+
+# Make figure output dir
+fig_dir_path <- file.path(params$figure_output_path, fig_prefix)
+dir.create(fig_dir_path, showWarnings = FALSE)
 
 tee <- function(plot_item, plot_name, width = 12, height = 8, res = 450) {
   png(
-    file.path(params$figure_output_path, paste0(fig_prefix, "_", plot_name, ".png")),
+    file.path(fig_dir_path, paste0(fig_prefix, "_", plot_name, ".png")),
     width = width,
     height = height,
     units = "in",
@@ -60,20 +61,30 @@ tee <- function(plot_item, plot_name, width = 12, height = 8, res = 450) {
 ```
 
 Here we select the departments included in our analysis.
+What were included was an arbitrary choice.
+We chose to make two new sub-networks: a "hard-science"s network and a biological area network.
+We ignored humanities since they produce weird networks (as they have peculiar publishing processes).
 
-```{r}
-## Inspect what departments are available:
+```{r department-notes, include=FALSE, eval=FALSE}
+## Some notes for devs on choosing what departments are processed:
+
+# To inspect what departments are available:
 #igraph::vertex_attr(graph, "department") |> as.factor() |> levels() |> paste(collapse = "\n") |> cat()
+```
 
+
+```{r department-selection}
 # Select what departments should be included, and what color they should have.
 # Optionally (NA ignores), select a new name (e.g. abbreviation) for the
 # department, to be shown in the legend.
+#
 # The structure is list(old_name = c(new_name, color))
-# Note some (like "giurisprudenza") are missing. See above for the full list.
+
 # TODO: Export this to a config file (maybe)?
 
 ## A list of "hard science" departments, to use a derogatory term.
-# I leave some commented if we want to include them later.
+# I leave some commented both to show that they exist, and for ease of access
+# if we want to include them later.
 selected_departments <- list(
   "biotecnologie molecolari e scienze per la salute" = c("biotech. mol.", "darkgreen"),
   # NOTE: This department seems like an error - there's just one person in it
@@ -120,16 +131,37 @@ hard_graph <- find_communities(hard_graph)
 
 bio_graph <- filter_graph(graph, selected_departments_biology)
 bio_graph <- find_communities(bio_graph)
+```
 
+Note that filtering keeps only the major component of the graph.
+This may or may not be desirable, but it helps for visualization and community
+detection.
+
+## Network Degree distribution
+We begin by describing the network.
+
+```{r network-basic-stats}
+get_basic_statistics(graph, "General") |> cat()
+# I re-make them here so i can skip filtering the major component.
+filter_graph(graph, selected_departments, keep_only_major = FALSE) |>
+  get_basic_statistics("Hard-science area") |> cat()
+filter_graph(graph, selected_departments_biology, keep_only_major = FALSE) |>
+  get_basic_statistics("Bio area") |> cat()
+```
+
+Then, we inspect the network degree.
+```{r network-degree}
+## Network Degree
+plot_degree_distribution(graph, loglog = TRUE) |> tee("general_degree_distribution")
+plot_degree_distribution(hard_graph, loglog = TRUE) |> tee("hard_degree_distribution")
+plot_degree_distribution(bio_graph, loglog = TRUE) |> tee("bio_degree_distribution")
 ```
 
 ## Plotting
-
 First, we make a raw plot of just the network. This is most probably impossible to inspect.
 
-```{r, fig.width=10, fig.height=10}
-## PLOTTING GRAPHS
-# If 'weights' is NULL the function uses weights in the graph
+```{r hard-graph-plot}
+# If 'weights' is NULL the function uses th weights already in the graph
 hard_layout <- graphlayouts::layout_with_sparse_stress(
   hard_graph, weights = NULL, pivots = 25
 )
@@ -143,8 +175,7 @@ plot_graph(
 
 ```
 
-```{r}
-#faster layout
+```{r bio-graph-plot}
 layout <- graphlayouts::layout_with_sparse_stress(
   bio_graph, weights = NULL, pivots = 25
 )
@@ -157,9 +188,10 @@ plot_graph(
 ) |> tee("bio_general_graph")
 ```
 
-
-```{r, eval=FALSE, include=FALSE}
+```{r pretty-slow-bio-graph, eval=FALSE, include=FALSE}
 # Using igraph::layout_with_dh() is prettier, but takes a very, very long time
+# This is why this chunk is not included or evaluated, as it slows down
+# the analysis by about 10 minutes on my machine.
 layout <- igraph::layout_with_dh(bio_graph)
 plot_graph(
   bio_graph, selected_departments_biology, layout = layout,
@@ -170,10 +202,15 @@ plot_graph(
 ) |> tee("hard_general_pretty_graph")
 ```
 
-Now we can inspect single departments:
+Now we can inspect single departments. The original graph is filtered again to
+select just one department, and then plotted.
+We use the walker strategy as sometimes - for some reason - the graph is
+disconnected and therefore the spinglass approach fails.
 
-```{r}
-# Inspect single departments
+```{r single-department-inspection}
+# For ease of use, we list all the single departments that we want, and we
+# save them later one by one.
+# Colors are purely for decoration.
 plots <- list(
   "DBios" = inspect_one(
     graph,
@@ -182,11 +219,16 @@ plots <- list(
     walk = TRUE,
     label_degree_treshold = 0
   ),
-  "biotech_mol" = inspect_one(graph, "biotecnologie molecolari e scienze per la salute", "biotech", "green", walk = TRUE, label_degree_treshold = 0),
+  "biotech_mol" = inspect_one(
+    graph,
+    "biotecnologie molecolari e scienze per la salute",
+    "biotech", "green",
+    walk = TRUE,
+    label_degree_treshold = 0
+  ),
   "psicologia" = inspect_one(graph, "psicologia", NA, "blue", walk = TRUE),
   "fisica" = inspect_one(graph, "fisica", NA, "orange", label_degree_treshold = 2, walk = TRUE),
   "oncologia" = inspect_one(graph, "oncologia", NA, "purple", label_degree_treshold = 2, walk = TRUE),
-  "studi_umanistici" = inspect_one(graph, "studi umanistici", NA, "yellow", label_degree_treshold = 2, walk = TRUE),
   "scienze_mediche" =inspect_one(
     graph, "scienze mediche", NA, "yellow", label_degree_treshold = 2,
     override_communities = 2, walk = TRUE
@@ -195,15 +237,46 @@ plots <- list(
 
 for (i in seq_along(plots)) {
   plot_names <- names(plots)
-  tee(plots[i], paste0("individual_plots_", plot_names[i]))
+  tee(plots[i], paste0("individual_plots_", plot_names[i])) |> print()
 }
 
 ```
 
+We now look at the MBC and the DBios, which might be interesting.
+```{r mbc-bio-graph}
+# This will just be used later on for making the dual graph
+selected_departments_mbc_bio <- list(
+  "biotecnologie molecolari e scienze per la salute" = c("biotech. mol.", "blue"),
+  "scienze della vita e biologia dei sistemi" = c("DBioS", "red")
+)
+
+mbc_bio_graph <- filter_graph(graph, selected_departments_mbc_bio)
+mbc_bio_graph <- find_communities(mbc_bio_graph, number_override = 20)
+
+selected_departments_mbc_bio <- list(
+  "biotecnologie molecolari e scienze per la salute" = c("biotech. mol.", "blue"),
+  "scienze della vita e biologia dei sistemi" = c("DBioS", "red")
+)
+
+layout <- igraph::layout_with_dh(
+  mbc_bio_graph
+)
+plot_graph(
+  mbc_bio_graph, selected_departments_mbc_bio, layout = layout,
+  include_labels = TRUE,
+  label_degree_treshold = 0,
+  include_communities = TRUE,
+  title = "Biological area network - DH layout"
+) |> tee("mbc_bio_graph")
+```
+
 ## Community purity
 
-```{r}
-## --- Community purity
+We inspect community purity through the purity plots and the purity dot plots.
+Please take a look at the descriptions of the generative functions to learn
+more on what these plots show.
+
+```{r community-purity}
 bio_purity <- get_community_purity(bio_graph)
 plot_purity(bio_purity, selected_departments_biology) |> tee("bio_purity")
 plot_purity_dots(bio_purity, selected_departments_biology) |> tee("bio_purity_dots")
@@ -213,14 +286,11 @@ hard_purity <- get_community_purity(hard_graph)
 plot_purity(hard_purity, selected_departments) |> tee("hard_purity")
 plot_purity_dots(hard_purity, selected_departments) |> tee("hard_purity_dots")
 plot_purity_dots2(hard_purity, selected_departments) |> tee("hard_purity_dots2")
-```
 
-## Network Degree distribution
-
-```{r}
-## Network Degree
-plot_degree_distribution(graph, loglog = TRUE) |> tee("general_degree_distribution")
-plot_degree_distribution(hard_graph, loglog = TRUE) |> tee("hard_degree_distribution")
-plot_degree_distribution(bio_graph, loglog = TRUE) |> tee("bio_degree_distribution")
+# Save the community purities to a file
+data_dir <- file.path(params$figure_output_path, fig_prefix, "data")
+dir.create(data_dir, showWarnings = FALSE)
+write_csv(bio_purity, file = file.path(data_dir, paste0(fig_prefix, "_biological_purity.csv")))
+write_csv(hard_purity, file = file.path(data_dir, paste0(fig_prefix, "_hard_purity.csv")))
 ```
 

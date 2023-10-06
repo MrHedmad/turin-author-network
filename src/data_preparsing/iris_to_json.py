@@ -96,12 +96,7 @@ class AuthorGlobber:
             # TODO: We return the saved one, but which is better?
             return self.authors[author.id]
 
-        for saved_author in self.authors.values():
-            # If we have a similar author, return it
-            if saved_author.distance(author) < 0.25:
-                # TODO: make the distance a parameter
-                # TODO: Which author is better?
-                return saved_author
+        # TODO: Heuristics here?
 
         return None
 
