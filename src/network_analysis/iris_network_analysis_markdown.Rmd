@@ -264,7 +264,7 @@ layout <- igraph::layout_with_dh(
 plot_graph(
   mbc_bio_graph, selected_departments_mbc_bio, layout = layout,
   include_labels = TRUE,
-  label_degree_treshold = 0,
+  label_degree_treshold = 10,
   include_communities = TRUE,
   title = "Biological area network - DH layout"
 ) |> tee("mbc_bio_graph")
