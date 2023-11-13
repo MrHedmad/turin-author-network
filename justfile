@@ -20,3 +20,10 @@ enter-docker:
     turinauthors:bleeding \
     bash
 
+# Export data for uploading to Zenodo
+export-data:
+    ./src/data_preparsing/iris_to_json.py ./data/in/papers/*.csv -v | \
+    ./src/anonimize_CRIS.py > \
+    ./data/out/unito_author_collab_data.json
+
+

@@ -29,12 +29,22 @@ TO_CLEAN += ./data/years/all_years.flag
 	mkdir -p ${@D}
 	. env/bin/activate; \
 	./src/data_preparsing/group_files.py ./data/in/metadata.json window 3 --sliding | \
-		parallel --linebuffer -j 4 "./src/data_preparsing/iris_to_json.py {=uq=} -v > ${@D}/file_{#}.json" \	
+		parallel --linebuffer -j 4 \
+		"./src/data_preparsing/iris_to_json.py {=uq=} -v > ${@D}/file_{#}.json" \	
 
 	touch $@
 
 PHONY += all
 all: $(ALL)
+
+./data/out/unito_author_collab_data.json: env/touchfile \
+		src/data_preparsing/iris_to_json.py
+	. env/bin/activate \
+		./src/data_preparsing/iris_to_json.py $(wildcard ./data/in/papers/*.csv) -v \
+		--output_file ${@}
+
+PHONY += export_data
+export_data: ./data/out/unito_author_collab_data.json
 
 PHONY += clean
 clean:

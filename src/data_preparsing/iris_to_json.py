@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pandas as pd
-from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, TextIO
 from uuid import uuid4
@@ -115,6 +114,9 @@ def parse_file_simple(gobbler: AuthorGlobber, data: pd.DataFrame) -> list[Paper]
     # The resulting network will only have known authors. Not sure if this is ok
     # but it's a start.
 
+    # This does not work with authors without any cris ID.
+    data = data.dropna(subset="author_cris_id")
+
     papers = []
 
     for paper_id, paper in tqdm(data.groupby("handle")):
@@ -124,7 +126,7 @@ def parse_file_simple(gobbler: AuthorGlobber, data: pd.DataFrame) -> list[Paper]
             author = Author(
                 name=row["author_name"],
                 surname=row["author_surname"],
-                affiliation="University of Turin (maybe)",
+                affiliation="University of Turin",
                 department=row["author_department"],
                 id=row["author_cris_id"],
             )
@@ -149,7 +151,7 @@ def parse_file_simple(gobbler: AuthorGlobber, data: pd.DataFrame) -> list[Paper]
 
 def read_iris_data(stream: TextIO) -> pd.DataFrame:
     """Read the iris data from the given path"""
-    log.info(f"Reading a file to an IRIS dataset")
+    log.info("Reading a file to an IRIS dataset")
     # Edit the header
     data = StringIO()
     reader = csv.reader(stream)
@@ -259,6 +261,7 @@ def main(files: list[TextIO], output_steam: IOBase):
             "papers": [x.__dict__ for x in papers],
         },
         output_steam,
+        indent=4,
         cls=NpEncoder,
     )
 
